@@ -28,11 +28,17 @@ object TimeUsage {
 
   def timeUsageByLifePeriod(): Unit = {
     val (columns, initDf) = read("/timeusage/atussum.csv")
-//    initDf.show()
+    //    initDf.show()
     val (primaryNeedsColumns, workColumns, otherColumns) = classifiedColumns(columns)
     val summaryDf = timeUsageSummary(primaryNeedsColumns, workColumns, otherColumns, initDf)
     val finalDf = timeUsageGrouped(summaryDf)
     finalDf.show()
+
+    //    val guille = timeUsageGroupedSql(summaryDf)
+    //    val guille2 = timeUsageSummaryTyped(guille)
+
+    //    val guilleFinal = timeUsageGroupedTyped(guille2)
+
   }
 
   /** @return The read DataFrame along with its column names. */
@@ -64,24 +70,27 @@ object TimeUsage {
     * @param columnNames Column names of the DataFrame
     */
   def dfSchema(columnNames: List[String]): StructType = {
-
-
-    StructType(
-      columnNames.map(
-        x => x match {
-          case "tucaseid" => StructField(x, StringType, false)
-          case _ => StructField(x, DoubleType, false)
-        }
-      )
-    )
-
+    val list = StructField(columnNames.head, StringType, false) :: columnNames.tail.map {
+      new StructField(_, DoubleType, false)
+    }
+    StructType(list.toArray)
   }
+
+
+  //    StructType(
+  //      columnNames.map(
+  //        x => x match {
+  //          case "tucaseid" => StructField(x, StringType, false)
+  //          case _ => StructField(x, DoubleType, false)
+  //        }
+  //      )
+  //    )
 
 
   /** @return An RDD Row compatible with the schema produced by `dfSchema`
     * @param line Raw fields
     */
-  def row(line: List[String]): Row ={
+  def row(line: List[String]): Row = {
     Row.fromSeq(line.head.toString :: line.tail.map(_.toDouble))
   }
 
@@ -101,76 +110,86 @@ object TimeUsage {
     */
   def classifiedColumns(columnNames: List[String]): (List[Column], List[Column], List[Column]) = {
 
-    //   val guille  =  columnNames.map(
-    //      actividad => actividad match {
-    //        case u if u.startsWith("t01") => Row(1, actividad)
-    //        case u if u.startsWith("t03") => Row(1, actividad)
-    //        case u if u.startsWith("t11") => Row(1, actividad)
-    //        case u if u.startsWith("t1801") => Row(1, actividad)
-    //        case u if u.startsWith("t1803") => Row(1, actividad)
+
+    val primaryPre: List[String] = List("t01", "t03", "t11", "t1801", "t1803")
+    val workingPre = List("t05", "t1805")
+    val otherPre = List("t02", "t04", "t06", "t07", "t08", "t09", "t10", "t12", "t13", "t14", "t15", "t16", "t18")
+    columnNames.foldRight[(List[Column], List[Column], List[Column])]((Nil, Nil, Nil)) {
+      (col, list) =>
+        if (primaryPre.exists(col.startsWith)) list.copy(_1 = new Column(col) :: list._1)
+        else if (workingPre.exists(col.startsWith)) list.copy(_2 = new Column(col) :: list._2)
+        else if (otherPre.exists(col.startsWith)) list.copy(_3 = new Column(col) :: list._3)
+        else list
+    }
+
+    //    val categoryMappings = List(
+    //      List("t01", "t03", "t11", "t1801", "t1803"),
+    //      List("t05", "t1805"),
+    //      List("t02", "t04", "t06", "t07", "t08", "t09", "t10", "t12", "t13", "t14", "t15", "t16", "t18")
+    //    ).zipWithIndex
     //
-    //        case u if u.startsWith("t05") => Row(2, actividad)
-    //        case u if u.startsWith("t1805") => Row(2, actividad)
     //
-    //        case u if u.startsWith("t02") => Row(3, actividad)
-    //        case u if u.startsWith("t04") => Row(3, actividad)
-    //        case u if u.startsWith("t06") => Row(3, actividad)
-    //        case u if u.startsWith("t07") => Row(3, actividad)
-    //        case u if u.startsWith("t08") => Row(3, actividad)
-    //        case u if u.startsWith("t09") => Row(3, actividad)
-    //        case u if u.startsWith("t10") => Row(3, actividad)
-    //        case u if u.startsWith("t12") => Row(3, actividad)
-    //        case u if u.startsWith("t13") => Row(3, actividad)
-    //        case u if u.startsWith("t14") => Row(3, actividad)
-    //        case u if u.startsWith("t15") => Row(3, actividad)
-    //        case u if u.startsWith("t16") => Row(3, actividad)
-    //        case u if u.startsWith("t18") => Row(3, actividad)
-    //
-    //        case _ => Row(-1, actividad)
-    //
+    //    val groups: Map[Int, List[Column]] = columnNames
+    //      .foldLeft(List.empty[(Int, Column)])((acc, name) => {
+    //        categoryMappings
+    //          .flatMap {
+    //            case (prefixes, index) if prefixes.exists(name.startsWith) => Some((index, new Column(name)))
+    //            case _ => None
+    //          }
+    //          .sortBy(_._1)
+    //          .headOption match {
+    //          case Some(tuple) => tuple :: acc
+    //          case None => acc
+    //        }
     //      }
-    //    )
+    //      )
+    //      .groupBy(_._1)
+    //      .mapValues(_.map(_._2))
+    //
+    //
+    //    val results = (0 to 2).map(index => groups.getOrElse(index, List.empty[Column]))
+    //
+    //    (results(0), results(1), results(2))
 
-
-    (columnNames.filter(
-      actividad => actividad match {
-        case u if u.startsWith("t01") => true
-        case u if u.startsWith("t01") => true
-        case u if u.startsWith("t03") => true
-        case u if u.startsWith("t11") => true
-        case u if u.startsWith("t1801") => true
-        case u if u.startsWith("t1803") => true
-        case _ => false
-      }
-    ).map(x => col(x)),
-
-      columnNames.filter(
-        actividad => actividad match {
-          case u if u.startsWith("t05") => true
-          case u if u.startsWith("t1805") => true
-          case _ => false
-        }
-      ).map(y => col(y)),
-
-      columnNames.filter(
-        actividad => actividad match {
-          case u if u.startsWith("t02") => true
-          case u if u.startsWith("t04") => true
-          case u if u.startsWith("t06") => true
-          case u if u.startsWith("t07") => true
-          case u if u.startsWith("t08") => true
-          case u if u.startsWith("t09") => true
-          case u if u.startsWith("t10") => true
-          case u if u.startsWith("t12") => true
-          case u if u.startsWith("t13") => true
-          case u if u.startsWith("t14") => true
-          case u if u.startsWith("t15") => true
-          case u if u.startsWith("t16") => true
-          case u if u.startsWith("t18") => true
-          case _ => false
-        }
-      ).map(z => col(z))
-      )
+    //    (columnNames.filter(
+    //      actividad => actividad match {
+    //        case u if u.startsWith("t01") => true
+    //        case u if u.startsWith("t01") => true
+    //        case u if u.startsWith("t03") => true
+    //        case u if u.startsWith("t11") => true
+    //        case u if u.startsWith("t1801") => true
+    //        case u if u.startsWith("t1803") => true
+    //        case _ => false
+    //      }
+    //    ).map(x => col(x)),
+    //
+    //      columnNames.filter(
+    //        actividad => actividad match {
+    //          case u if u.startsWith("t05") => true
+    //          case u if u.startsWith("t1805") => true
+    //          case _ => false
+    //        }
+    //      ).map(y => col(y)),
+    //
+    //      columnNames.filter(
+    //        actividad => actividad match {
+    //          case u if u.startsWith("t02") => true
+    //          case u if u.startsWith("t04") => true
+    //          case u if u.startsWith("t06") => true
+    //          case u if u.startsWith("t07") => true
+    //          case u if u.startsWith("t08") => true
+    //          case u if u.startsWith("t09") => true
+    //          case u if u.startsWith("t10") => true
+    //          case u if u.startsWith("t12") => true
+    //          case u if u.startsWith("t13") => true
+    //          case u if u.startsWith("t14") => true
+    //          case u if u.startsWith("t15") => true
+    //          case u if u.startsWith("t16") => true
+    //          case u if u.startsWith("t18") => true
+    //          case _ => false
+    //        }
+    //      ).map(z => col(z))
+    //      )
 
 
   }
@@ -210,21 +229,42 @@ object TimeUsage {
                         otherColumns: List[Column],
                         df: DataFrame
                       ): DataFrame = {
-    //    val workingStatusProjection: Column = if (df.where(column=telfs) >= 1 && <3 ) new Column("working") else new Column("not working")
 
-    val workingStatusProjection: Column = when(df("telfs") < 3 && df("telfs") >= 1, "working").otherwise("not working").as("working")
-    val sexProjection: Column = when(df("telfs") === 3, "male").otherwise("female").as("sex")
-    val ageProjection: Column = when(df("teage") >= 15 && df("teage") <= 22, "young").when(df("teage") > 23 && df("teage") <= 55, "active").otherwise("elder").as("age")
+//    val workingStatusProjection: Column =
+//      when($"telfs" >= 1 && $"telfs" < 3, "working").otherwise("not working").as("working")
+//    val sexProjection: Column =
+//      when($"tesex" === 1, "male").otherwise("female").as("sex")
+//    val ageProjection: Column =
+//      when($"teage" >= 15 && $"teage" <= 22, "young")
+//        .when($"teage" >= 23 && $"teage" <= 55, "active")
+//        .otherwise("elder")
+//        .as("age")
+//    val primaryNeedsProjection: Column = primaryNeedsColumns.reduce(_ + _).divide(60).as("primaryNeeds")
+//    val workProjection: Column = workColumns.reduce(_ + _).divide(60).as("work")
+//    val otherProjection: Column = otherColumns.reduce(_ + _).divide(60).as("other")
 
 
-    val primaryNeedsProjection: Column = primaryNeedsColumns.reduce(_ + _).as("primaryNeeds")
-    val workProjection: Column = workColumns.reduce(_ + _).as("work")
-    val otherProjection: Column = otherColumns.reduce(_ + _).as("other")
-//    df.printSchema()
+
+
+
+
+        //    val workingStatusProjection: Column = if (df.where(column=telfs) >= 1 && <3 ) new Column("working") else new Column("not working")
+
+        val workingStatusProjection: Column = when(df("telfs") < 3 && df("telfs") >= 1, "working").otherwise("not working").as("working")
+        val sexProjection: Column = when(df("telfs") === 1, "male").otherwise("female").as("sex")
+        val ageProjection: Column = when(df("teage") >= 15 && df("teage") <= 22, "young").when(df("teage") > 23 && df("teage") <= 55, "active").otherwise("elder").as("age")
+
+        //    def SumMinToHours (minutos: Double): Double = minutos/60
+
+        val primaryNeedsProjection: Column = primaryNeedsColumns.reduce(_ + _).divide(60).as("primaryNeeds")
+        //    val workProjection: Column =when(workColumns.reduce(_ + _).divide(60) >= 0 ,workColumns.reduce(_ + _).divide(60)).otherwise(0.toDouble).as("work")
+        val workProjection: Column = workColumns.reduce(_ + _).divide(60).as("work")
+        val otherProjection: Column = otherColumns.reduce(_ + _).divide(60).as("other")
+        //    df.printSchema()
 
     df
-          .select(workingStatusProjection, sexProjection, ageProjection, primaryNeedsProjection, workProjection, otherProjection)
-          .where($"telfs" <= 4) // Discard people who are not in labor force
+      .select(workingStatusProjection, sexProjection, ageProjection, primaryNeedsProjection, workProjection, otherProjection)
+      .where($"telfs" <= 4) // Discard people who are not in labor force
   }
 
   /** @return the average daily time (in hours) spent in primary needs, working or leisure, grouped by the different
@@ -245,7 +285,13 @@ object TimeUsage {
     *               Finally, the resulting DataFrame should be sorted by working status, sex and age.
     */
   def timeUsageGrouped(summed: DataFrame): DataFrame = {
-    ???
+
+    summed.groupBy($"working", $"sex", $"age")
+      .agg(
+        round(avg($"primaryNeeds"), 1)
+        , round(avg($"work"), 1)
+        , round(avg($"other"), 1)
+      ).orderBy($"working", $"sex", $"age")
   }
 
   /**
@@ -262,7 +308,16 @@ object TimeUsage {
     * @param viewName Name of the SQL view to use
     */
   def timeUsageGroupedSqlQuery(viewName: String): String =
-    ???
+//    s"""
+//  select working, sex, age,
+//  round(avg(primaryNeeds), 1),
+//  round(avg(work), 1),
+//  round(avg(other), 1)
+//  from $viewName
+//  group by working, sex, age
+//  order by working, sex, age """
+
+  s"""select working, sex, age, round(avg(primaryNeeds), 1), round(avg(work), 1), round(avg(other), 1) from $viewName group by working, sex, age order by working, sex, age """
 
   /**
     * @return A `Dataset[TimeUsageRow]` from the “untyped” `DataFrame`
@@ -271,8 +326,17 @@ object TimeUsage {
     *                           Hint: you should use the `getAs` method of `Row` to look up columns and
     *                           cast them at the same time.
     */
-  def timeUsageSummaryTyped(timeUsageSummaryDf: DataFrame): Dataset[TimeUsageRow] =
-    ???
+  def timeUsageSummaryTyped(timeUsageSummaryDf: DataFrame): Dataset[TimeUsageRow] = {
+    //    timeUsageSummaryDf.as[TimeUsageRow]
+    //timeUsageSummaryDf.map(x => TimeUsageRow(x.getAs("working"), x.getAs("sex"), x.getAs("age"), x.getAs("primaryNeeds"), x.getAs("work"), x.getAs("other")))
+
+    timeUsageSummaryDf.map(row => TimeUsageRow(row.getAs("working"),
+      row.getAs("sex"),
+      row.getAs("age"),
+      row.getAs("primaryNeeds"),
+      row.getAs("work"),
+      row.getAs("other")))
+  }
 
   /**
     * @return Same as `timeUsageGrouped`, but using the typed API when possible
@@ -287,8 +351,39 @@ object TimeUsage {
     */
   def timeUsageGroupedTyped(summed: Dataset[TimeUsageRow]): Dataset[TimeUsageRow] = {
     import org.apache.spark.sql.expressions.scalalang.typed
-    ???
+
+
+    //    summed.groupBy( x => (x.working, x.sex, x.age)).agg(avg($"primarynode"))
+
+    //    summed.groupBy($"working", $"sex", $"age")
+    //      .agg(avg($"primaryNeeds"), avg($"work"), avg($"other"))
+    //      .sort($"working", $"sex", $"age")
+
+
+    //    summed.groupByKey(tur => tur.working + "," + tur.sex + "," + tur.age)
+    //      .agg(typed.avg[TimeUsageRow](_.primaryNeeds), typed.avg[TimeUsageRow](_.work), typed.avg[TimeUsageRow](_.other))
+    //      .map(d => (d._1.split(",").toList, d._2, d._3, d._4))
+    //      .map(d => TimeUsageRow(d._1(0), d._1(1), d._1(2), Math.round(d._2 * 10) / 10d, Math.round(d._3 * 10) / 10d, Math.round(d._4 * 10) / 10d))
+    //      .orderBy("working", "sex", "age")
+
+
+    //    summed
+    //      .groupByKey(row => (row.working, row.sex, row.age))
+    //      .agg(
+    //        avg(_.primaryNeeds),
+    //        avg(_.work),
+    //        avg(_.other)
+    //      ).map {
+    //      case ((working, sex, age), primaryNeeds, work, other) => TimeUsageRow(working, sex, age,  round1(primaryNeeds), round1(work), round1(other))
+    //    }.orderBy('working, 'sex, 'age)
+
+    summed.groupByKey(tur => tur.working + "," + tur.sex + "," + tur.age)
+      .agg(typed.avg[TimeUsageRow](_.primaryNeeds), typed.avg[TimeUsageRow](_.work), typed.avg[TimeUsageRow](_.other))
+      .map(d => (d._1.split(",").toList, d._2, d._3, d._4))
+      .map(d => TimeUsageRow(d._1(0), d._1(1), d._1(2), Math.round(d._2 * 10) / 10d, Math.round(d._3 * 10) / 10d, Math.round(d._4 * 10) / 10d))
+      .orderBy("working", "sex", "age")
   }
+
 }
 
 /**
